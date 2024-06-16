@@ -6,8 +6,18 @@ import tensorflow as tf
 import numpy as np
 from fastapi import FastAPI, Response, File, UploadFile
 from PIL import Image
+from google.cloud import storage
+from datetime import datetime
 from tensorflow.keras.utils import img_to_array
 from keras.applications.mobilenet import preprocess_input
+
+# Set the environment variable for Google Cloud credentials
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "sampah-cuan-credentials.json"
+
+# Initialize the Google Cloud Storage client
+storage_client = storage.Client()
+bucket_name = "cuan-sampah-bucket"
+bucket = storage_client.bucket(bucket_name)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 # Configure logging
@@ -111,8 +121,15 @@ async def predict_image(response: Response, uploaded_file: UploadFile=File(...))
         if uploaded_file.content_type not in ["image/jpeg", "image/png"]:
             response.status_code = 400
             return {"error": "File is Not an Image"}
+        
+        # Save the uploaded file to Google Cloud Storage
+        blob = bucket.blob(f"uploads/{datetime.now().strftime('%Y%m%d%H%M%S')}_{uploaded_file.filename}")
+        blob.upload_from_file(uploaded_file.file)
+        file_url = blob.public_url
+        logging.info(f"File uploaded to {file_url}")
 
         # Read image file and load it into PIL
+        uploaded_file.file.seek(0)
         image = Image.open(uploaded_file.file)
         
         # Preprocess the image
